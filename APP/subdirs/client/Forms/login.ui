@@ -17,13 +17,26 @@
    <property name="rightMargin"><number>20</number></property>
    <property name="bottomMargin"><number>20</number></property>
 
-   <!-- 只保留蓝色大标题 -->
+   <!-- 顶部大标题：放大字号、加粗、深色 -->
    <item>
     <widget class="QLabel" name="lbTitle">
      <property name="objectName"><string>headline</string></property>
      <property name="text"><string>工业现场远程专家支持系统</string></property>
      <property name="alignment"><set>Qt::AlignHCenter|Qt::AlignVCenter</set></property>
      <property name="margin"><number>8</number></property>
+     <property name="styleSheet">
+      <string notr="true">color: #0f172a;</string>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>22</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="minimumHeight">
+      <number>48</number>
+     </property>
     </widget>
    </item>
 

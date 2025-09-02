@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>Regist</class>
  <widget class="QWidget" name="Regist">
@@ -22,6 +21,19 @@
      <property name="text"><string>工业现场远程专家支持系统</string></property>
      <property name="alignment"><set>Qt::AlignHCenter|Qt::AlignVCenter</set></property>
      <property name="margin"><number>8</number></property>
+     <property name="styleSheet">
+      <string notr="true">color: #0f172a;</string>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>22</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="minimumHeight">
+      <number>48</number>
+     </property>
     </widget>
    </item>
 
@@ -49,7 +61,6 @@
         <property name="echoMode"><enum>QLineEdit::Password</enum></property>
       </widget></item>
 
-      <!-- 关键：在确认密码与按钮之间加入少量垂直间隔，避免看到按钮的蓝色“顶边” -->
       <item>
        <spacer name="spacer_between_confirm_and_buttons">
         <property name="orientation"><enum>Qt::Vertical</enum></property>
@@ -69,14 +80,17 @@
         </widget></item>
        </layout>
       </item>
+
      </layout>
     </widget>
    </item>
 
-   <item><spacer name="spacer_bottom">
+   <item>
+    <spacer name="spacer_bottom">
      <property name="orientation"><enum>Qt::Vertical</enum></property>
      <property name="sizeHint"><size><width>20</width><height>20</height></size></property>
-   </spacer></item>
+    </spacer>
+   </item>
 
   </layout>
  </widget>

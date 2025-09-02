@@ -45,6 +45,8 @@ ClientExpert::ClientExpert(QWidget *parent) :
     ui(new Ui::ClientExpert)
 {
     ui->setupUi(this);
+    // 标注顶层对象名，用于主题检测（聊天侧栏蓝色渐变等）
+    setObjectName("ClientExpert");
 
     // 实时通讯模块
     commWidget_ = new CommWidget(this);

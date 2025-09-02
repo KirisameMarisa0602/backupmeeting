@@ -78,6 +78,8 @@ ClientFactory::ClientFactory(QWidget *parent) :
     ui(new Ui::ClientFactory)
 {
     ui->setupUi(this);
+    // 标注顶层对象名，用于主题检测（聊天侧栏绿色渐变等）
+    setObjectName("ClientFactory");
 
     // 实时通讯模块
     commWidget_ = new CommWidget(this);

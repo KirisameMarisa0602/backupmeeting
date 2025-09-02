@@ -43,6 +43,7 @@
 #include <QVBoxLayout>
 #include <QVideoFrame>
 #include <QVideoProbe>
+#include <QColorDialog>
 #include <QtMath>
 #include <cmath>
 
@@ -497,7 +498,7 @@ MainWindow::MainWindow(QWidget *parent)
     sChatList = new QListWidget(this);
     sChatList->setSelectionMode(QAbstractItemView::NoSelection);
     sChatList->setFocusPolicy(Qt::NoFocus);
-    // 原黑色硬编码改为按主题的渐变背景
+    // 按主题启用右侧渐变背景
     {
         const QString theme = detectThemeFromTopLevel(this);
         sChatList->setStyleSheet(chatListQssForTheme(theme));
@@ -526,6 +527,47 @@ MainWindow::MainWindow(QWidget *parent)
     main->addWidget(rightWrap, 0);
     setCentralWidget(w);
     setWindowTitle("Multi-Party Video Client");
+
+    // 主题主色系（用于按钮美化）
+    const QString theme = detectThemeFromTopLevel(this);
+    QString primary = "#6b7280", primaryDark = "#4b5563", primaryHover = "#7b8391";
+    if (theme == "expert")  { primary = "#1976d2"; primaryDark = "#115293"; primaryHover = "#1e88e5"; }
+    if (theme == "factory") { primary = "#2e7d32"; primaryDark = "#1b5e20"; primaryHover = "#388e3c"; }
+    auto stylePrimaryBtn = [&](QPushButton* b){
+        if (!b) return;
+        b->setStyleSheet(QString(
+            "QPushButton{background:%1;color:#fff;border:1px solid %2;border-radius:10px;padding:6px 12px;}"
+            "QPushButton:hover{background:%3;}"
+            "QPushButton:disabled{background:#cbd5e1;color:#6b7280;border-color:#cbd5e1;}"
+        ).arg(primary, primaryDark, primaryHover));
+    };
+    // 应用到主要操作按钮
+    stylePrimaryBtn(btnCamera_);
+    stylePrimaryBtn(btnMic_);
+    stylePrimaryBtn(btnShare_);
+    stylePrimaryBtn(btnConn);
+    stylePrimaryBtn(btnJoin);
+    stylePrimaryBtn(btnSend);
+    stylePrimaryBtn(btnSendImg);
+    stylePrimaryBtn(btnSendFile);
+
+    // 危险操作按钮：退出房间（红色）
+    if (btnLeave_) {
+        btnLeave_->setStyleSheet(
+            "QPushButton{background:#d32f2f;color:#fff;border:1px solid #b71c1c;border-radius:10px;padding:6px 12px;}"
+            "QPushButton:hover{background:#e53935;}"
+            "QPushButton:disabled{background:#f8d7da;color:#b85c5c;border-color:#f1b0b7;}"
+        );
+    }
+
+    // “开始标注”切换按钮（选中高亮为主题色）
+    if (btnAnnotOn_) {
+        btnAnnotOn_->setStyleSheet(QString(
+            "QToolButton{background:#ffffff;border:1px solid #d1d5db;border-radius:10px;padding:6px 10px;}"
+            "QToolButton:hover{background:#f8fafc;}"
+            "QToolButton:checked{background:%1;color:#ffffff;border:1px solid %2;}"
+        ).arg(primary, primaryDark));
+    }
 
     // 本地 tile
     localTile_ = *makeTile(gridPage_, QStringLiteral("我（本地预览）"));

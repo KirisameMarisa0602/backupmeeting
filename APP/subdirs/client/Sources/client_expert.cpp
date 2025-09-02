@@ -134,9 +134,12 @@ void ClientExpert::setJoinedOrder(bool joined)
 
 void ClientExpert::updateTabEnabled()
 {
-    // 索引提示：0=工单设置, 1=设备管理, 2=企业知识库, 3=实时通讯
-    ui->tabWidget->setTabEnabled(1, joinedOrder);
-    ui->tabWidget->setTabEnabled(3, joinedOrder);
+    // 之前是根据 joinedOrder 禁用/启用页签：
+    // ui->tabWidget->setTabEnabled(1, joinedOrder);
+    // ui->tabWidget->setTabEnabled(3, joinedOrder);
+    //
+    // 现在改为：不再禁用页签，统一在切换时做提示与拦截。
+    // 因此这里保持空实现，保留函数以兼容其他调用点。
 }
 
 void ClientExpert::refreshOrders()
@@ -274,22 +277,19 @@ void ClientExpert::sendUpdateOrder(int orderId, const QString& status)
 void ClientExpert::on_tabChanged(int idx)
 {
     QWidget* page = ui->tabWidget->widget(idx);
-    if (idx == 0) {
-        refreshOrders();
-    } else if (page == ui->tabDevice) {
-        int row = ui->tableOrders->currentRow();
-        if (row >= 0 && row < orders.size() && devicePanel_) {
-            devicePanel_->setOrderContext(QString::number(orders[row].id));
-        }
-    } else if (page == ui->tabOther) {
-        int row = ui->tableOrders->currentRow();
-        if (row >= 0 && row < orders.size() && kbPanel_) {
-            kbPanel_->setRoomFilter(QString::number(orders[row].id));
-        }
-        if (kbPanel_) kbPanel_->refresh();
-    }
-}
 
+    // 当尚未接受工单时，拦截进入“设备管理”与“实时通讯”，并弹出提示信息
+    if (!joinedOrder && (page == ui->tabDevice || page == ui->tabRealtime)) {
+        QMessageBox::information(this, tr("提示"),
+                                 tr("没有待处理工单，请先在“工单设置”页接受工单。"));
+        // 回到“工单设置”（索引 0）
+        ui->tabWidget->setCurrentIndex(0);
+        return;
+    }
+
+    // 其他页签切换逻辑由已有的 currentChanged 连接处理
+    // （如：知识库页刷新、实时通讯聚焦等，不需重复写在这里）
+}
 void ClientExpert::onSearchOrder()
 {
     refreshOrders();

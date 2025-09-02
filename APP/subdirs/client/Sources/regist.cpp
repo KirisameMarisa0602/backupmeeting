@@ -11,9 +11,31 @@
 #include <QLineEdit>
 #include <QRegularExpression>
 #include <QStyle>
+#include <QPushButton>
 
 static const char* SERVER_HOST = "127.0.0.1";
 static const quint16 SERVER_PORT = 5555;
+
+static inline void repolish(QWidget* w) {
+    if (!w) return;
+    w->style()->unpolish(w);
+    w->style()->polish(w);
+    w->update();
+}
+
+// 同步把 roleTheme 设置到窗口本身以及“primary”按钮上，确保即时生效
+static void applyRoleThemeTo(QWidget* root, const QString& key) {
+    if (!root) return;
+    root->setProperty("roleTheme", key);
+    const auto buttons = root->findChildren<QPushButton*>();
+    for (QPushButton* b : buttons) {
+        if (b && b->property("primary").toBool()) {
+            b->setProperty("roleTheme", key);
+            repolish(b);
+        }
+    }
+    repolish(root);
+}
 
 Regist::Regist(QWidget *parent) :
     QWidget(parent),
@@ -34,21 +56,16 @@ Regist::Regist(QWidget *parent) :
     ui->cbRole->addItem("工厂");        // 2
     ui->cbRole->setCurrentIndex(0);
 
-    // 初始主题：未选择 -> 灰色
-    this->setProperty("roleTheme", "none");
-    this->style()->unpolish(this);
-    this->style()->polish(this);
+    // 初始主题：未选择 -> 灰色（同步到按钮）
+    applyRoleThemeTo(this, QStringLiteral("none"));
 
     // 身份变化 -> 更新UI主题属性（不触碰任何功能逻辑）
     connect(ui->cbRole, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int idx){
-                QString key = "none";
-                if (idx == 1) key = "expert";
-                else if (idx == 2) key = "factory";
-                this->setProperty("roleTheme", key);
-                this->style()->unpolish(this);
-                this->style()->polish(this);
-                this->update();
+                QString key = QStringLiteral("none");
+                if (idx == 1) key = QStringLiteral("expert");
+                else if (idx == 2) key = QStringLiteral("factory");
+                applyRoleThemeTo(this, key);
             });
 }
 
@@ -67,13 +84,10 @@ void Regist::preset(const QString &role, const QString &user, const QString &pas
     ui->lePassword->setText(pass);
     ui->leConfirm->clear();
 
-    // 预填后立即应用主题
+    // 预填后立即应用主题（同步到按钮）
     int idx = ui->cbRole->currentIndex();
     QString key = (idx==1) ? "expert" : (idx==2) ? "factory" : "none";
-    this->setProperty("roleTheme", key);
-    this->style()->unpolish(this);
-    this->style()->polish(this);
-    this->update();
+    applyRoleThemeTo(this, key);
 }
 
 QString Regist::selectedRole() const
@@ -131,8 +145,6 @@ void Regist::on_btnRegister_clicked()
         return;
     }
 
-    // 可选：若项目已有服务端校验规则，请保持一致；此处不做额外业务改动
-
     const QString role = selectedRole();
     if (role.isEmpty()) {
         QMessageBox::warning(this, "提示", "请选择身份");
@@ -157,7 +169,7 @@ void Regist::on_btnRegister_clicked()
     }
 
     QMessageBox::information(this, "注册成功", "账号初始化完成");
-    close(); // UI行为保持不变：关闭注册窗口
+    close();
 }
 
 void Regist::on_btnBack_clicked()

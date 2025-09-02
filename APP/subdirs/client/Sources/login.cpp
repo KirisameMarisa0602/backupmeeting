@@ -14,12 +14,13 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QStyle>
+#include <QPushButton>
 
 // 全局样式（仅UI）。说明：
 // - roleTheme 属性用于登录/注册页动态切换主题：none(灰)/expert(蓝)/factory(绿)。
 // - 对主界面不改代码，通过根对象名 #ClientExpert / #ClientFactory 自动着色。
-// - 不使用任何图形特效，跨平台稳定。
-// - 提升 QComboBox 下拉箭头和下拉项对比度；突显表头与 Tab 选中态。
+// - 为了保证按钮在切换身份时“立即”刷新，新增了 QPushButton[roleTheme=...][primary="true"] 规则，
+//   并在代码里同步把 roleTheme 设置到主按钮上。
 static const char kGlobalQss[] = R"QSS(
 * {
     font-family: "Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Segoe UI",sans-serif;
@@ -108,20 +109,35 @@ QPushButton:hover { background: rgba(255,255,255,1.0); }
 QPushButton:pressed { background: #eef2f7; }
 QPushButton:disabled { color: #9ca3af; background: #f3f4f6; border-color: #e5e7eb; }
 
-/* 主要按钮（primary=true）主题色 */
-QWidget[roleTheme="expert"] QPushButton[primary="true"] { background: #1976d2; color: #ffffff; border: 1px solid #115293; }
-QWidget[roleTheme="expert"] QPushButton[primary="true"]:hover   { background: #1e88e5; }
-QWidget[roleTheme="expert"] QPushButton[primary="true"]:pressed { background: #1565c0; }
+/* 主要按钮（两种匹配都支持：祖先+后代，或按钮自身的 roleTheme） */
+QWidget[roleTheme="expert"]  QPushButton[primary="true"],
+QPushButton[roleTheme="expert"][primary="true"] {
+    background: #1976d2; color: #ffffff; border: 1px solid #115293;
+}
+QWidget[roleTheme="expert"]  QPushButton[primary="true"]:hover,
+QPushButton[roleTheme="expert"][primary="true"]:hover { background: #1e88e5; }
+QWidget[roleTheme="expert"]  QPushButton[primary="true"]:pressed,
+QPushButton[roleTheme="expert"][primary="true"]:pressed { background: #1565c0; }
 
-QWidget[roleTheme="factory"] QPushButton[primary="true"] { background: #2e7d32; color: #ffffff; border: 1px solid #1b5e20; }
-QWidget[roleTheme="factory"] QPushButton[primary="true"]:hover   { background: #388e3c; }
-QWidget[roleTheme="factory"] QPushButton[primary="true"]:pressed { background: #1b5e20; }
+QWidget[roleTheme="factory"] QPushButton[primary="true"],
+QPushButton[roleTheme="factory"][primary="true"] {
+    background: #2e7d32; color: #ffffff; border: 1px solid #1b5e20;
+}
+QWidget[roleTheme="factory"] QPushButton[primary="true"]:hover,
+QPushButton[roleTheme="factory"][primary="true"]:hover { background: #388e3c; }
+QWidget[roleTheme="factory"] QPushButton[primary="true"]:pressed,
+QPushButton[roleTheme="factory"][primary="true"]:pressed { background: #1b5e20; }
 
-QWidget[roleTheme="none"] QPushButton[primary="true"] { background: #6b7280; color: #ffffff; border: 1px solid #4b5563; }
-QWidget[roleTheme="none"] QPushButton[primary="true"]:hover   { background: #7b8391; }
-QWidget[roleTheme="none"] QPushButton[primary="true"]:pressed { background: #4b5563; }
+QWidget[roleTheme="none"]    QPushButton[primary="true"],
+QPushButton[roleTheme="none"][primary="true"] {
+    background: #6b7280; color: #ffffff; border: 1px solid #4b5563;
+}
+QWidget[roleTheme="none"]    QPushButton[primary="true"]:hover,
+QPushButton[roleTheme="none"][primary="true"]:hover { background: #7b8391; }
+QWidget[roleTheme="none"]    QPushButton[primary="true"]:pressed,
+QPushButton[roleTheme="none"][primary="true"]:pressed { background: #4b5563; }
 
-/* 主界面 Tab 着色（对象名匹配），和登录/注册页（roleTheme）两种方式都支持 */
+/* 主界面 Tab 与表格配色（保持不变） */
 QTabBar::tab {
     min-width: 100px; min-height: 28px;
     background: #eaeaea; color: #111827;
@@ -133,7 +149,6 @@ QWidget[roleTheme="expert"] QTabBar::tab:selected { background: #1976d2; color: 
 QWidget[roleTheme="factory"] QTabBar::tab:selected { background: #2e7d32; color: #ffffff; }
 QWidget[roleTheme="none"]    QTabBar::tab:selected { background: #6b7280; color: #ffffff; }
 
-/* 表格：表头高亮、选中高亮、斑马纹 */
 QTableView, QTableWidget {
     background: #ffffff;
     border: 1px solid #e5e7eb;
@@ -153,12 +168,33 @@ QTableView::item:selected, QTableWidget::item:selected { background: #90caf9; co
 QWidget#ClientFactory QTableView::item:selected,
 QWidget#ClientFactory QTableWidget::item:selected { background: #a5d6a7; color: #0b1020; }
 
-/* 分隔线（如有） */
 QFrame[frameShape="4"], QFrame[frameShape="5"] { color: #e5e7eb; background: #e5e7eb; }
 )QSS";
 
 static const char* SERVER_HOST = "127.0.0.1";
 static const quint16 SERVER_PORT = 5555;
+
+static inline void repolish(QWidget* w) {
+    if (!w) return;
+    w->style()->unpolish(w);
+    w->style()->polish(w);
+    w->update();
+}
+
+// 同步把 roleTheme 设置到窗口本身以及“primary”按钮上，确保即时生效
+static void applyRoleThemeTo(QWidget* root, const QString& key) {
+    if (!root) return;
+    root->setProperty("roleTheme", key);
+    // 给页面内的主按钮也设置同名属性，保证样式立即刷新
+    const auto buttons = root->findChildren<QPushButton*>();
+    for (QPushButton* b : buttons) {
+        if (b && b->property("primary").toBool()) {
+            b->setProperty("roleTheme", key);
+            repolish(b);
+        }
+    }
+    repolish(root);
+}
 
 Login::Login(QWidget *parent) :
     QWidget(parent),
@@ -179,21 +215,16 @@ Login::Login(QWidget *parent) :
     ui->cbRole->addItem("工厂");        // 2
     ui->cbRole->setCurrentIndex(0);
 
-    // 初始主题：未选择 -> 灰色
-    this->setProperty("roleTheme", "none");
-    this->style()->unpolish(this);
-    this->style()->polish(this);
+    // 初始主题：未选择 -> 灰色（同步到按钮）
+    applyRoleThemeTo(this, QStringLiteral("none"));
 
     // 身份变化 -> 仅更新UI属性，不触碰业务逻辑
     connect(ui->cbRole, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int idx){
-                QString key = "none";
-                if (idx == 1) key = "expert";
-                else if (idx == 2) key = "factory";
-                this->setProperty("roleTheme", key);
-                this->style()->unpolish(this);
-                this->style()->polish(this);
-                this->update();
+                QString key = QStringLiteral("none");
+                if (idx == 1) key = QStringLiteral("expert");
+                else if (idx == 2) key = QStringLiteral("factory");
+                applyRoleThemeTo(this, key);
             });
 }
 
@@ -294,14 +325,13 @@ void Login::on_btnToReg_clicked()
     // 打开注册窗口（不改注册逻辑）
     Regist *r = new Regist(nullptr);
     r->setAttribute(Qt::WA_DeleteOnClose);
-    // 若 Regist::preset 存在则预填（存在即用）
+    // 如果 Regist::preset 存在则预填
     if (r->metaObject()->indexOfMethod("preset(QString,QString,QString)") >= 0) {
         QMetaObject::invokeMethod(r, "preset",
                                   Q_ARG(QString, selectedRole()),
                                   Q_ARG(QString, ui->leUsername->text()),
                                   Q_ARG(QString, ui->lePassword->text()));
     }
-    // 关闭/销毁注册窗口后恢复显示登录
     connect(r, &QObject::destroyed, this, [this](){
         this->show(); this->raise(); this->activateWindow();
     });

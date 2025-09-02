@@ -34,6 +34,8 @@ signals:
 private slots:
     void onSendControl();
     void onTickUpdate();
+    // 新增：当设备下拉框变更时，先广播，再刷新
+    void onDeviceSelected(int index);
 
 private:
     QChartView* pressureChart_;
@@ -53,6 +55,9 @@ private:
     QVector<QVector<QPointF> > pressureHist_;
     QVector<QVector<QPointF> > tempHist_;
     const int kMaxPoints = 120;
+
+    // 防止对端切换设备时本端再次广播形成回环
+    bool suppressSelectionBroadcast_ = false;
 
     void setupUi();
     void buildDeterministicDevices(const QString& orderId);

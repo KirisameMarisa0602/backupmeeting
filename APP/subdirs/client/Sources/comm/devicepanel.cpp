@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QtCharts/QLineSeries>
 #include <QtMath>
+#include <QSignalBlocker>
 
 QT_CHARTS_USE_NAMESPACE
 
@@ -87,13 +88,23 @@ void DevicePanel::setupUi() {
     info->addWidget(tableFaults_,1);
     mainLayout->addLayout(info);
 
-    connect(cbDevice_, SIGNAL(currentIndexChanged(int)), this, SLOT(refreshUi()));
+    // 原来这里是连接到 refreshUi：
+    // connect(cbDevice_, SIGNAL(currentIndexChanged(int)), this, SLOT(refreshUi()));
+    // 改为连接到 onDeviceSelected（内部会广播并调用 refreshUi）
+    connect(cbDevice_, SIGNAL(currentIndexChanged(int)), this, SLOT(onDeviceSelected(int)));
 }
 
 void DevicePanel::setOrderContext(const QString& orderId)
 {
     currentOrderId_ = orderId;
     buildDeterministicDevices(orderId);
+    // 在图表标题中展示工单号
+    if (pressureChart_ && pressureChart_->chart()) {
+        pressureChart_->chart()->setTitle(QString::fromUtf8("压力曲线（工单 %1）").arg(orderId));
+    }
+    if (tempChart_ && tempChart_->chart()) {
+        tempChart_->chart()->setTitle(QString::fromUtf8("温度曲线（工单 %1）").arg(orderId));
+    }
     refreshUi();
 }
 
@@ -181,7 +192,7 @@ void DevicePanel::refreshUi()
         pc->axes(Qt::Horizontal).first()->setRange(minX, maxX);
         pc->axes(Qt::Vertical).first()->setRange(d.basePressure-2, d.basePressure+2);
     }
-    pc->setTitle(QString::fromUtf8("压力曲线"));
+    pc->setTitle(QString::fromUtf8("压力曲线（工单 %1）").arg(currentOrderId_));
 
     // 温度曲线
     QLineSeries* ts = new QLineSeries;
@@ -196,7 +207,7 @@ void DevicePanel::refreshUi()
         tc->axes(Qt::Horizontal).first()->setRange(minX, maxX);
         tc->axes(Qt::Vertical).first()->setRange(d.baseTemp-3, d.baseTemp+3);
     }
-    tc->setTitle(QString::fromUtf8("温度曲线"));
+    tc->setTitle(QString::fromUtf8("温度曲线（工单 %1）").arg(currentOrderId_));
 
     // 日志/故障
     tableLogs_->setRowCount(devices_[idx].logs.size());
@@ -222,6 +233,28 @@ void DevicePanel::applyControlCommand(const QString& device,
                                       const QString& sender,
                                       qint64 tsMs)
 {
+    // 优先处理“SELECT”命令（对端切换设备）
+    if (command.compare(QString::fromUtf8("SELECT"), Qt::CaseInsensitive) == 0 && cbDevice_) {
+        for (int i = 0; i < cbDevice_->count(); ++i) {
+            if (cbDevice_->itemText(i) == device) {
+                const QSignalBlocker blocker(cbDevice_);
+                suppressSelectionBroadcast_ = true;
+                cbDevice_->setCurrentIndex(i);
+                suppressSelectionBroadcast_ = false;
+                break;
+            }
+        }
+        int idx = cbDevice_->currentIndex();
+        if (idx >= 0 && idx < devices_.size()) {
+            appendLog(idx, QString::fromUtf8("[%1] 对端选择了设备：%2")
+                              .arg(QDateTime::fromMSecsSinceEpoch(tsMs).toString("HH:mm:ss"))
+                              .arg(device));
+        }
+        refreshUi();
+        return;
+    }
+
+    // 其它命令：记录日志
     int idx=-1;
     for (int i=0;i<devices_.size();++i)
         if (devices_[i].name==device){ idx=i; break; }
@@ -229,6 +262,20 @@ void DevicePanel::applyControlCommand(const QString& device,
     QString timeStr = QDateTime::fromMSecsSinceEpoch(tsMs).toString("HH:mm:ss");
     appendLog(idx, QString::fromUtf8("设备收到指令: %1 (来自:%2) [%3]")
                      .arg(command, sender, timeStr));
+}
+
+void DevicePanel::onDeviceSelected(int)
+{
+    if (suppressSelectionBroadcast_) {
+        refreshUi();
+        return;
+    }
+    int idx = cbDevice_ ? cbDevice_->currentIndex() : -1;
+    if (idx >= 0 && idx < devices_.size()) {
+        // 本端选择设备 -> 广播给对端保持同步
+        emit deviceControlSent(devices_[idx].name, QString::fromUtf8("SELECT"));
+    }
+    refreshUi();
 }
 
 void DevicePanel::onSendControl()

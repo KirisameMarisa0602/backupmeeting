@@ -157,6 +157,42 @@ static VideoTile* makeTile(QWidget* parent, const QString& nameText) {
 // 全局（文件内）聊天列表指针，避免改动头文件
 static QListWidget* sChatList = nullptr;
 
+// 根据顶层窗口对象名判定主题（仅UI用途）
+static QString detectThemeFromTopLevel(QWidget* w) {
+    if (!w) return "none";
+    QWidget* tlw = w->window();
+    if (!tlw) {
+        tlw = w;
+        while (tlw->parentWidget()) tlw = tlw->parentWidget();
+    }
+    const QString name = tlw->objectName();
+    if (name == "ClientExpert")  return "expert";
+    if (name == "ClientFactory") return "factory";
+    return "none";
+}
+
+// 生成聊天列表的样式（渐变背景，不涉及功能）
+static QString chatListQssForTheme(const QString& theme) {
+    QString bgGrad, border;
+    if (theme == "expert") {
+        bgGrad = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0d47a1, stop:1 #bbdefb)";
+        border = "#115293";
+    } else if (theme == "factory") {
+        bgGrad = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1b5e20, stop:1 #c8e6c9)";
+        border = "#1b5e20";
+    } else {
+        bgGrad = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f3f4f6, stop:1 #e5e7eb)";
+        border = "#cbd5e1";
+    }
+    QString qss =
+        "QListWidget, QListWidget::viewport {"
+        "  background:%1;"
+        "  border:1px solid %2;"
+        "}"
+        "QLabel{background:transparent;}";
+    return qss.arg(bgGrad, border);
+}
+
 // 生成一个“气泡”外观的消息项容器（包含发送者标签与内容控件）
 static QWidget* makeBubble(const QString& sender, QWidget* content, bool outgoing) {
     auto* w = new QWidget;
@@ -421,7 +457,6 @@ MainWindow::MainWindow(QWidget *parent)
     cbAnnotTool_->addItem(QStringLiteral("矩形"),   int(AnnotModel::Rect));
     cbAnnotTool_->addItem(QStringLiteral("椭圆"),   int(AnnotModel::Ellipse));
     cbAnnotTool_->addItem(QStringLiteral("箭头"),   int(AnnotModel::Arrow));
-    cbAnnotTool_->addItem(QStringLiteral("文本"),   int(AnnotModel::Text));
     cbAnnotTool_->setCurrentIndex(0);
 
     cbAnnotWidth_ = new QComboBox(this);
@@ -462,7 +497,11 @@ MainWindow::MainWindow(QWidget *parent)
     sChatList = new QListWidget(this);
     sChatList->setSelectionMode(QAbstractItemView::NoSelection);
     sChatList->setFocusPolicy(Qt::NoFocus);
-    sChatList->setStyleSheet("QListWidget{background:#141414; border:1px solid #333;} QLabel{background:transparent;}");
+    // 原黑色硬编码改为按主题的渐变背景
+    {
+        const QString theme = detectThemeFromTopLevel(this);
+        sChatList->setStyleSheet(chatListQssForTheme(theme));
+    }
     right->addWidget(sChatList, 1);
 
     // 发送栏（文本/图片/文件）

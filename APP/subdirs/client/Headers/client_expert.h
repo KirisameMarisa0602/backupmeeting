@@ -42,7 +42,6 @@ private:
     QVector<OrderInfo> orders;
     bool joinedOrder = false;
 
-    // 面板
     KnowledgePanel* kbPanel_    = nullptr; // 企业知识库页（嵌入）
     DevicePanel*    devicePanel_ = nullptr; // 设备管理页（嵌入）
 

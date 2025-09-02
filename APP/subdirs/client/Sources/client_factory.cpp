@@ -14,15 +14,34 @@
 #include <QLineEdit>
 #include <QTextEdit>
 #include <QDialogButtonBox>
+#include <QElapsedTimer>
 
 #include "comm/commwidget.h"
 #include "comm/devicepanel.h"
-#include "comm/knowledge_panel.h"   // 恢复：嵌入式企业知识库
+#include "comm/knowledge_panel.h"
 
 static const char*  SERVER_HOST = "127.0.0.1";
 static const quint16 SERVER_PORT = 5555;
 
 extern QString g_factoryUsername;
+
+// 可靠读取“以换行分隔”的一条 JSON
+static QJsonDocument readJsonLine(QTcpSocket& sock, int timeoutMs = 5000) {
+    QByteArray buf;
+    QElapsedTimer et; et.start();
+    while (et.elapsed() < timeoutMs) {
+        if (!sock.bytesAvailable())
+            sock.waitForReadyRead(qMax(1, timeoutMs - int(et.elapsed())));
+        buf += sock.readAll();
+        int nl = buf.indexOf('\n');
+        if (nl >= 0) {
+            QByteArray line = buf.left(nl);
+            if (!line.isEmpty() && line.endsWith('\r')) line.chop(1);
+            return QJsonDocument::fromJson(line);
+        }
+    }
+    return QJsonDocument::fromJson(buf);
+}
 
 class NewOrderDialog : public QDialog {
 public:
@@ -49,8 +68,8 @@ public:
         layout->addWidget(editDesc);
         layout->addWidget(buttons);
 
-        connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
-        connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
+        connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     }
 };
 
@@ -64,33 +83,32 @@ ClientFactory::ClientFactory(QWidget *parent) :
     commWidget_ = new CommWidget(this);
     ui->verticalLayoutTabRealtime->addWidget(commWidget_);
 
-    // 设备管理面板
+    // 设备管理面板（纯本地模拟曲线，不依赖入会）
     devicePanel_ = new DevicePanel(this);
     ui->verticalLayoutTabDevice->addWidget(devicePanel_);
 
-    // 设备控制：面板 -> 广播
-    connect(devicePanel_, SIGNAL(deviceControlSent(QString,QString)),
-            this, SLOT(onSendDeviceControl(QString,QString)));
+    // 面板发起控制 -> 会议主窗广播
+    connect(devicePanel_, &DevicePanel::deviceControlSent,
+            this, &ClientFactory::onSendDeviceControl);
 
-    // 广播（含本端回显） -> 面板日志
-    connect(commWidget_->mainWindow(), SIGNAL(deviceControlMessage(QString,QString,QString,qint64)),
-            devicePanel_, SLOT(applyControlCommand(QString,QString,QString,qint64)));
+    // 会议主窗接收到（或本端回显） -> 面板写日志
+    connect(commWidget_->mainWindow(), &MainWindow::deviceControlMessage,
+            devicePanel_, [this](const QString& device,const QString& cmd,const QString& sender,qint64 ts){
+                devicePanel_->applyControlCommand(device, cmd, sender, ts);
+            });
 
     // 企业知识库面板（嵌入“企业知识库”页）
     kbPanel_ = new KnowledgePanel(ui->tabOther);
     kbPanel_->setServer(QString::fromLatin1(SERVER_HOST), SERVER_PORT);
     ui->verticalLayoutTabOther->addWidget(kbPanel_);
 
-    // 选择页时：实时通讯聚焦；设备页设上下文；知识库页刷新
+    // 选择页时：实时通讯聚焦；设备页设置上下文；知识库页刷新
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, [this](int idx){
         QWidget* page = ui->tabWidget->widget(idx);
         if (page == ui->tabRealtime) {
             commWidget_->mainWindow()->setFocus();
         } else if (page == ui->tabDevice) {
-            int row = ui->tableOrders->currentRow();
-            if (row >= 0 && row < orders.size() && devicePanel_) {
-                devicePanel_->setOrderContext(QString::number(orders[row].id));
-            }
+            ensureDeviceContextFromSelection();   // 进入设备页时确保上下文
         } else if (page == ui->tabOther) {
             int row = ui->tableOrders->currentRow();
             if (row >= 0 && row < orders.size() && kbPanel_) {
@@ -100,11 +118,18 @@ ClientFactory::ClientFactory(QWidget *parent) :
         }
     });
 
-    // 原有连接
-    connect(ui->tabWidget, SIGNAL(currentChanged(int)), this, SLOT(on_tabChanged(int)));
-    connect(ui->btnSearchOrder, SIGNAL(clicked()), this, SLOT(onSearchOrder()));
-    connect(ui->btnRefreshOrderStatus, SIGNAL(clicked()), this, SLOT(refreshOrders()));
-    connect(ui->btnDeleteOrder, SIGNAL(clicked()), this, SLOT(on_btnDeleteOrder_clicked()));
+    // 切换选中工单时，如果当前在“设备管理”页，同步上下文
+    connect(ui->tableOrders, &QTableWidget::itemSelectionChanged, this, [this](){
+        if (ui->tabWidget->currentWidget() == ui->tabDevice) {
+            ensureDeviceContextFromSelection();
+        }
+    });
+
+    // 原有连接（注意：槽指针不加括号）
+    connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ClientFactory::on_tabChanged);
+    connect(ui->btnSearchOrder, &QPushButton::clicked, this, &ClientFactory::onSearchOrder);
+    connect(ui->btnRefreshOrderStatus, &QPushButton::clicked, this, &ClientFactory::refreshOrders);
+    connect(ui->btnDeleteOrder, &QPushButton::clicked, this, &ClientFactory::on_btnDeleteOrder_clicked);
 
     refreshOrders();
     updateTabEnabled();
@@ -115,6 +140,22 @@ ClientFactory::~ClientFactory()
     delete ui;
 }
 
+void ClientFactory::ensureDeviceContextFromSelection()
+{
+    if (!devicePanel_) return;
+
+    // 若无选中行且有数据，默认选中第一行
+    if (ui->tableOrders->currentRow() < 0 && ui->tableOrders->rowCount() > 0) {
+        ui->tableOrders->setCurrentCell(0, 0);
+    }
+
+    int row = ui->tableOrders->currentRow();
+    if (row >= 0 && row < orders.size()) {
+        const QString orderId = QString::number(orders[row].id);
+        devicePanel_->setOrderContext(orderId);
+    }
+}
+
 void ClientFactory::refreshOrders()
 {
     QTcpSocket sock;
@@ -123,46 +164,49 @@ void ClientFactory::refreshOrders()
         QMessageBox::warning(this, "提示", "无法连接服务器");
         return;
     }
-    QJsonObject req;
-    req.insert("action", "get_orders");
-    req.insert("role", "factory");
-    req.insert("username", g_factoryUsername);
+    QJsonObject req{
+        {"action", "get_orders"},
+        {"role", "factory"},
+        {"username", g_factoryUsername}
+    };
     QString keyword = ui->lineEditKeyword->text().trimmed();
-    if (!keyword.isEmpty()) req.insert("keyword", keyword);
+    if (!keyword.isEmpty()) req["keyword"] = keyword;
     QString status = ui->comboBoxStatus->currentText();
-    if (status != "全部") req.insert("status", status);
+    if (status != "全部") req["status"] = status;
 
     sock.write(QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n");
-    sock.waitForBytesWritten(1000);
-    sock.waitForReadyRead(2000);
-    QByteArray resp = sock.readAll();
-    int nl = resp.indexOf('\n');
-    if (nl >= 0) resp = resp.left(nl);
-    QJsonDocument doc = QJsonDocument::fromJson(resp);
+    sock.flush();
+
+    QJsonDocument doc = readJsonLine(sock);
     if (!doc.isObject() || !doc.object().value("ok").toBool()) {
         QMessageBox::warning(this, "提示", "服务器响应异常");
         return;
     }
+
     orders.clear();
     QJsonArray arr = doc.object().value("orders").toArray();
-    for (int i = 0; i < arr.size(); ++i) {
-        QJsonObject o = arr.at(i).toObject();
-        OrderInfo od;
-        od.id = o.value("id").toInt();
-        od.title = o.value("title").toString();
-        od.desc = o.value("desc").toString();
-        od.status = o.value("status").toString();
-        orders.append(od);
+    orders.reserve(arr.size());
+    for (const QJsonValue& v : arr) {
+        QJsonObject o = v.toObject();
+        orders.append(OrderInfo{
+            o.value("id").toInt(), o.value("title").toString(),
+            o.value("desc").toString(), o.value("status").toString()
+        });
     }
-    QTableWidget* tbl = ui->tableOrders;
-    tbl->clear();
+
+    auto* tbl = ui->tableOrders;
+    bool wasSorting = tbl->isSortingEnabled();
+    tbl->setSortingEnabled(false);
+    tbl->clearContents();
     tbl->setColumnCount(4);
-    tbl->setRowCount(orders.size());
-    QStringList headers;
-    headers << "工单号" << "标题" << "描述" << "状态";
+    tbl->setRowCount(0);
+
+    QStringList headers{"工单号", "标题", "描述", "状态"};
     tbl->setHorizontalHeaderLabels(headers);
+
+    tbl->setRowCount(orders.size());
     for (int i = 0; i < orders.size(); ++i) {
-        const OrderInfo& od = orders[i];
+        const auto& od = orders[i];
         tbl->setItem(i, 0, new QTableWidgetItem(QString::number(od.id)));
         tbl->setItem(i, 1, new QTableWidgetItem(od.title));
         tbl->setItem(i, 2, new QTableWidgetItem(od.desc));
@@ -170,6 +214,12 @@ void ClientFactory::refreshOrders()
     }
     tbl->resizeColumnsToContents();
     tbl->clearSelection();
+    tbl->setSortingEnabled(wasSorting);
+
+    // 如果当前就在“设备管理”页，刷新完工单后立即确保上下文（让曲线立刻出现）
+    if (ui->tabWidget->currentWidget() == ui->tabDevice) {
+        ensureDeviceContextFromSelection();
+    }
 }
 
 void ClientFactory::on_btnNewOrder_clicked()
@@ -183,7 +233,8 @@ void ClientFactory::on_btnNewOrder_clicked()
             return;
         }
         sendCreateOrder(title, desc);
-        QTimer::singleShot(150, this, SLOT(refreshOrders()));
+        // 服务端确认后立即刷新
+        refreshOrders();
     }
 }
 
@@ -195,19 +246,16 @@ void ClientFactory::sendCreateOrder(const QString& title, const QString& desc)
         QMessageBox::warning(this, "提示", "无法连接服务器");
         return;
     }
-    QJsonObject req;
-    req.insert("action", "new_order");
-    req.insert("title", title);
-    req.insert("desc",  desc);
-    req.insert("factory_user", g_factoryUsername);
-
+    QJsonObject req{
+        {"action", "new_order"},
+        {"title", title},
+        {"desc",  desc},
+        {"factory_user", g_factoryUsername}
+    };
     sock.write(QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n");
-    sock.waitForBytesWritten(1000);
-    sock.waitForReadyRead(2000);
-    QByteArray resp = sock.readAll();
-    int nl = resp.indexOf('\n');
-    if (nl >= 0) resp = resp.left(nl);
-    QJsonDocument doc = QJsonDocument::fromJson(resp);
+    sock.flush();
+
+    QJsonDocument doc = readJsonLine(sock);
     if (!doc.isObject() || !doc.object().value("ok").toBool()) {
         QMessageBox::warning(this, "提示", "服务器响应异常");
     }
@@ -236,25 +284,23 @@ void ClientFactory::on_btnDeleteOrder_clicked()
         deletingOrder = false;
         return;
     }
-    QJsonObject req;
-    req.insert("action", "delete_order");
-    req.insert("id", id);
-    req.insert("username", g_factoryUsername);
-
+    QJsonObject req{
+        {"action", "delete_order"},
+        {"id", id},
+        {"username", g_factoryUsername}
+    };
     sock.write(QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n");
-    sock.waitForBytesWritten(1000);
-    sock.waitForReadyRead(2000);
-    QByteArray resp = sock.readAll();
-    int nl = resp.indexOf('\n');
-    if (nl >= 0) resp = resp.left(nl);
-    QJsonDocument doc = QJsonDocument::fromJson(resp);
+    sock.flush();
+
+    QJsonDocument doc = readJsonLine(sock);
     if (!doc.isObject() || !doc.object().value("ok").toBool()) {
         QMessageBox::warning(this, "提示", "服务器响应异常");
         deletingOrder = false;
         return;
     }
-    QTimer::singleShot(150, this, SLOT(refreshOrders()));
+
     deletingOrder = false;
+    refreshOrders();
 }
 
 void ClientFactory::updateTabEnabled()
@@ -270,10 +316,7 @@ void ClientFactory::on_tabChanged(int idx)
     if (idx == 0) {
         refreshOrders();
     } else if (page == ui->tabDevice) {
-        int row = ui->tableOrders->currentRow();
-        if (row >= 0 && row < orders.size() && devicePanel_) {
-            devicePanel_->setOrderContext(QString::number(orders[row].id));
-        }
+        ensureDeviceContextFromSelection();  // 兜底：进入设备页确保上下文
     } else if (page == ui->tabOther) {
         int row = ui->tableOrders->currentRow();
         if (row >= 0 && row < orders.size() && kbPanel_) {
@@ -290,5 +333,6 @@ void ClientFactory::onSearchOrder()
 
 void ClientFactory::onSendDeviceControl(const QString& device, const QString& command)
 {
+    // 广播给会议主窗（专家/工厂都会收到并在各自 DevicePanel 里写日志）
     commWidget_->mainWindow()->sendDeviceControlBroadcast(device, command);
 }

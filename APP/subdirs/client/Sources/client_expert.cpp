@@ -15,6 +15,7 @@
 #include "comm/knowledge_panel.h"
 #include <QTabWidget>
 #include <QTabBar>
+
 namespace {
 static void applyExpertTabStyle(QTabWidget* tabs) {
     if (!tabs) return;
@@ -33,7 +34,8 @@ static void applyExpertTabStyle(QTabWidget* tabs) {
     );
 }
 } // namespace
-// 与工程既有约定保持一致
+
+// 与工程既有约定保持一致：在本文件定义全局用户名变量
 QString g_factoryUsername;
 QString g_expertUsername;
 
@@ -72,10 +74,29 @@ ClientExpert::ClientExpert(QWidget *parent) :
     commWidget_ = new CommWidget(this);
     ui->verticalLayoutTabRealtime->addWidget(commWidget_);
 
-    // 切到“实时通讯”页时把焦点交给会议主窗
+    // 切到“实时通讯”页时自动入会并把焦点交给会议主窗
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, [this](int idx){
-        if (ui->tabWidget->widget(idx) == ui->tabRealtime) {
+        QWidget* page = ui->tabWidget->widget(idx);
+        if (page == ui->tabRealtime) {
+            // 确保有选中工单
+            if (ui->tableOrders->currentRow() < 0 && ui->tableOrders->rowCount() > 0) {
+                ui->tableOrders->setCurrentCell(0, 0);
+            }
+            int row = ui->tableOrders->currentRow();
+            if (row >= 0 && row < orders.size()) {
+                const QString room = QString::number(orders[row].id);
+                // User = g_expertUsername，room = 工单号
+                commWidget_->mainWindow()->setJoinedContext(g_expertUsername, room);
+                QMetaObject::invokeMethod(commWidget_->mainWindow(), "onJoin");
+            }
             commWidget_->mainWindow()->setFocus();
+        } else if (page == ui->tabOther && kbPanel_) {
+            // 进入知识库页根据当前工单过滤并刷新
+            int row = ui->tableOrders->currentRow();
+            if (row >= 0 && row < orders.size()) {
+                kbPanel_->setRoomFilter(QString::number(orders[row].id));
+            }
+            kbPanel_->refresh();
         }
     });
 
@@ -96,19 +117,26 @@ ClientExpert::ClientExpert(QWidget *parent) :
     kbPanel_->setServer(QString::fromLatin1(SERVER_HOST), SERVER_PORT);
     ui->verticalLayoutTabOther->addWidget(kbPanel_);
 
-    // 进入知识库页自动刷新
-    connect(ui->tabWidget, &QTabWidget::currentChanged, this, [this](int idx){
-        if (ui->tabWidget->widget(idx) == ui->tabOther && kbPanel_) {
-            kbPanel_->refresh();
-        }
-    });
-
-    // 其它已有连接
+    // 进入知识库页自动刷新（其余逻辑在上面的 currentChanged 合并处理）
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ClientExpert::on_tabChanged);
+
     connect(ui->btnAccept, &QPushButton::clicked, this, &ClientExpert::on_btnAccept_clicked);
     connect(ui->btnReject, &QPushButton::clicked, this, &ClientExpert::on_btnReject_clicked);
     connect(ui->btnRefreshOrderStatus, &QPushButton::clicked, this, &ClientExpert::refreshOrders);
     connect(ui->btnSearchOrder, &QPushButton::clicked, this, &ClientExpert::onSearchOrder);
+
+    // 切换选中工单时：若当前在“实时通讯”页，自动切换入会房间
+    connect(ui->tableOrders, &QTableWidget::itemSelectionChanged, this, [this](){
+        if (ui->tabWidget->currentWidget() == ui->tabRealtime) {
+            int row = ui->tableOrders->currentRow();
+            if (row >= 0 && row < orders.size()) {
+                const QString room = QString::number(orders[row].id);
+                commWidget_->mainWindow()->setJoinedContext(g_expertUsername, room);
+                QMetaObject::invokeMethod(commWidget_->mainWindow(), "onJoin");
+            }
+        }
+        // 知识库页保持原行为：切换时不强制刷新，进入该页时刷新
+    });
 
     // 筛选项
     ui->comboBoxStatus->clear();
@@ -193,7 +221,7 @@ void ClientExpert::refreshOrders()
     tbl->setRowCount(orders.size());
     for (int i = 0; i < orders.size(); ++i) {
         const auto& od = orders[i];
-        tbl->setItem(i, 0, new QTableWidgetItem(QString::number(od.id)));
+        tbl->setItem(i, 0, new QTableWidgetItem(od.id > 0 ? QString::number(od.id) : QString()));
         tbl->setItem(i, 1, new QTableWidgetItem(od.title));
         tbl->setItem(i, 2, new QTableWidgetItem(od.desc));
         tbl->setItem(i, 3, new QTableWidgetItem(od.status));
@@ -201,6 +229,19 @@ void ClientExpert::refreshOrders()
     tbl->resizeColumnsToContents();
     tbl->clearSelection();
     tbl->setSortingEnabled(wasSorting);
+
+    // 如果当前在“实时通讯”页，刷新后确保房间上下文
+    if (ui->tabWidget->currentWidget() == ui->tabRealtime) {
+        if (ui->tableOrders->currentRow() < 0 && ui->tableOrders->rowCount() > 0) {
+            ui->tableOrders->setCurrentCell(0, 0);
+        }
+        int row = ui->tableOrders->currentRow();
+        if (row >= 0 && row < orders.size()) {
+            const QString room = QString::number(orders[row].id);
+            commWidget_->mainWindow()->setJoinedContext(g_expertUsername, room);
+            QMetaObject::invokeMethod(commWidget_->mainWindow(), "onJoin");
+        }
+    }
 }
 
 void ClientExpert::on_btnAccept_clicked()
@@ -221,7 +262,7 @@ void ClientExpert::on_btnAccept_clicked()
     if (devicePanel_) devicePanel_->setOrderContext(QString::number(id));
     if (kbPanel_)     kbPanel_->setRoomFilter(QString::number(id));
 
-    // 自动加入会议上下文（保持你项目原有逻辑）
+    // 自动加入会议上下文（User=用户名；room=工单号）
     if (!g_expertUsername.isEmpty()) {
         commWidget_->mainWindow()->setJoinedContext(g_expertUsername, QString::number(id));
     } else {
@@ -286,10 +327,9 @@ void ClientExpert::on_tabChanged(int idx)
         ui->tabWidget->setCurrentIndex(0);
         return;
     }
-
     // 其他页签切换逻辑由已有的 currentChanged 连接处理
-    // （如：知识库页刷新、实时通讯聚焦等，不需重复写在这里）
 }
+
 void ClientExpert::onSearchOrder()
 {
     refreshOrders();

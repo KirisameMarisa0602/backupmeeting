@@ -17,6 +17,9 @@
 #include <QPushButton>
 #include <QToolButton>
 #include <QWidgetAction>
+extern QString g_factoryUsername;
+extern QString g_expertUsername;
+
 static void addPasswordToggle(QLineEdit* le) {
     if (!le) return;
     auto wa = new QWidgetAction(le);
@@ -323,6 +326,13 @@ void Login::on_btnLogin_clicked()
     if (!rep.value("ok").toBool(false)) {
         QMessageBox::warning(this, "登录失败", rep.value("msg").toString("未知错误"));
         return;
+    }
+
+    // 写入全局用户名（供实时通讯与工单页使用）
+    if (role == "expert") {
+        g_expertUsername = username;
+    } else if (role == "factory") {
+        g_factoryUsername = username;
     }
 
     // 仅UI窗口切换，功能不变

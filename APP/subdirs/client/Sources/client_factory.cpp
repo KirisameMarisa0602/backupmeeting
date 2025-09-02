@@ -21,6 +21,7 @@
 #include "comm/knowledge_panel.h"
 #include <QTabWidget>
 #include <QTabBar>
+
 namespace {
 static void applyFactoryTabStyle(QTabWidget* tabs) {
     if (!tabs) return;
@@ -129,6 +130,19 @@ ClientFactory::ClientFactory(QWidget *parent) :
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, [this](int idx){
         QWidget* page = ui->tabWidget->widget(idx);
         if (page == ui->tabRealtime) {
+            // 确保有选中工单
+            if (ui->tableOrders->currentRow() < 0 && ui->tableOrders->rowCount() > 0) {
+                ui->tableOrders->setCurrentCell(0, 0);
+            }
+            int row = ui->tableOrders->currentRow();
+            if (row >= 0 && row < orders.size()) {
+                const QString room = QString::number(orders[row].id);
+                // 自动设置：User = g_factoryUsername，room = 工单号
+                commWidget_->mainWindow()->setJoinedContext(g_factoryUsername, room);
+                QMetaObject::invokeMethod(commWidget_->mainWindow(), "onJoin");
+            } else {
+                QMessageBox::information(this, QString::fromUtf8("提示"), QString::fromUtf8("请先选择一个工单"));
+            }
             commWidget_->mainWindow()->setFocus();
         } else if (page == ui->tabDevice) {
             ensureDeviceContextFromSelection();   // 进入设备页时确保上下文
@@ -141,10 +155,19 @@ ClientFactory::ClientFactory(QWidget *parent) :
         }
     });
 
-    // 切换选中工单时，如果当前在“设备管理”页，同步上下文
+    // 切换选中工单时：
+    // - 若当前在“设备管理”页，同步上下文到 DevicePanel
+    // - 若当前在“实时通讯”页，切换入会房间（room = 工单号）
     connect(ui->tableOrders, &QTableWidget::itemSelectionChanged, this, [this](){
         if (ui->tabWidget->currentWidget() == ui->tabDevice) {
             ensureDeviceContextFromSelection();
+        } else if (ui->tabWidget->currentWidget() == ui->tabRealtime) {
+            int row = ui->tableOrders->currentRow();
+            if (row >= 0 && row < orders.size()) {
+                const QString room = QString::number(orders[row].id);
+                commWidget_->mainWindow()->setJoinedContext(g_factoryUsername, room);
+                QMetaObject::invokeMethod(commWidget_->mainWindow(), "onJoin");
+            }
         }
     });
 
@@ -238,6 +261,19 @@ void ClientFactory::refreshOrders()
     tbl->resizeColumnsToContents();
     tbl->clearSelection();
     tbl->setSortingEnabled(wasSorting);
+
+    // 如果当前在“实时通讯”页，刷新后确保房间上下文
+    if (ui->tabWidget->currentWidget() == ui->tabRealtime) {
+        if (ui->tableOrders->currentRow() < 0 && ui->tableOrders->rowCount() > 0) {
+            ui->tableOrders->setCurrentCell(0, 0);
+        }
+        int row = ui->tableOrders->currentRow();
+        if (row >= 0 && row < orders.size()) {
+            const QString room = QString::number(orders[row].id);
+            commWidget_->mainWindow()->setJoinedContext(g_factoryUsername, room);
+            QMetaObject::invokeMethod(commWidget_->mainWindow(), "onJoin");
+        }
+    }
 
     // 如果当前就在“设备管理”页，刷新完工单后立即确保上下文（让曲线立刻出现）
     if (ui->tabWidget->currentWidget() == ui->tabDevice) {

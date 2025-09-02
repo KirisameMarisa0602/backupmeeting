@@ -351,17 +351,38 @@ QString KnowledgePanel::knowledgeRoot(bool interactive) const
 
 QString KnowledgePanel::resolveAbsolutePath(const QString& relOrAbs, bool interactive) const
 {
-    QFileInfo fi(relOrAbs);
-    if (fi.isAbsolute()) return fi.absoluteFilePath();
-
-    // 相对路径：用 root 拼接
-    const QString root = knowledgeRoot(interactive);
-    if (!root.isEmpty()) {
-        QString joined = QDir(root).filePath(relOrAbs);
+    auto normalize = [](QString p){
+        p = QDir::cleanPath(p);
+#ifdef Q_OS_WIN
+        p.replace('\\', '/');
+#endif
+        return p;
+    };
+    auto joinWithRoot = [&](const QString& rel)->QString {
+        const QString root = knowledgeRoot(interactive);
+        if (root.isEmpty()) return rel;
+        QString joined = QDir(root).filePath(rel);
         return QFileInfo(joined).absoluteFilePath();
+    };
+
+    QFileInfo fi(relOrAbs);
+    if (fi.isAbsolute()) {
+        // 若为服务器上的绝对路径，尝试映射到本机的知识库根路径
+        QString abs = normalize(fi.absoluteFilePath());
+        int idx = abs.indexOf("/knowledge/");
+        if (idx >= 0) {
+            // 截取从 knowledge/ 起的相对部分
+            QString rel = abs.mid(idx + 1); // 去掉开头的 '/'
+            return joinWithRoot(rel);
+        }
+        return fi.absoluteFilePath();
     }
-    // 没有 root 时，仍返回原字符串（让后续错误提示更直观）
-    return relOrAbs;
+
+    // 相对路径：若已包含 knowledge/ 前缀，直接与本机根拼接；否则仍按相对路径与根拼接
+    QString rel = normalize(relOrAbs);
+    if (rel.startsWith("./")) rel = rel.mid(2);
+    if (rel.startsWith("/"))  rel = rel.mid(1);
+    return joinWithRoot(rel);
 }
 
 void KnowledgePanel::playFile(const QString& filePath) const

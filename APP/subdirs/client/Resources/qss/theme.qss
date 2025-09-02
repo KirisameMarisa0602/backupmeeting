@@ -1,0 +1,81 @@
+/* 全局黑色背景与明亮前景 */
+QWidget {
+  background-color: #000000;
+  color: #E6E6E6;
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC";
+  font-size: 12pt;
+}
+
+/* 标题：蓝色加粗放大 */
+QLabel#headline {
+  color: #2F7DD5;
+  font-size: 18pt;
+  font-weight: 700;
+}
+
+/* 表单容器去边框（仅布局用） */
+QFrame#card {
+  background: transparent;
+  border: none;
+}
+
+/* 输入与下拉 */
+QLineEdit, QComboBox, QTextEdit, QPlainTextEdit {
+  background-color: #1A1C20;
+  border: 1px solid #2A2E34;
+  border-radius: 6px;
+  padding: 8px;
+}
+QLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus {
+  border-color: #1E88E5;
+}
+
+/* 仅对确认密码输入框取消蓝色聚焦边框，保持灰色，避免视觉上的“蓝色底色” */
+QLineEdit#leConfirm, QLineEdit#leConfirm:focus {
+  border: 1px solid #2A2E34;
+  background-color: #1A1C20;
+}
+
+/* 下拉框右侧区域与白色箭头 */
+QComboBox::drop-down {
+  width: 34px;
+  border-left: 1px solid #2A2E34;
+  background-color: #23262B;
+}
+QComboBox::down-arrow {
+  image: url(:/icons/chevron-down-white.svg);
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+}
+QComboBox QAbstractItemView {
+  background-color: #1A1C20;
+  border: 1px solid #2A2E34;
+  selection-background-color: #1E88E5;
+  selection-color: white;
+}
+
+/* 按钮：默认灰；primary 为蓝色 */
+QPushButton {
+  background-color: #2A2E34;
+  border: 1px solid #3A3F45;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #E6E6E6;
+}
+QPushButton:hover { background-color: #333940; }
+QPushButton:pressed { background-color: #2A2E34; }
+
+QPushButton[primary="true"] {
+  background-color: #1E88E5;
+  border: 1px solid #1B6FB6;
+  color: #FFFFFF;
+}
+QPushButton[primary="true"]:hover { background-color: #2A8FE7; }
+QPushButton[primary="true"]:pressed { background-color: #1976D2; }
+
+QPushButton:disabled {
+  background-color: #1A1C20;
+  color: #8D8F93;
+  border-color: #2A2E34;
+}

@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ClientExpert</class>
+ <widget class="QWidget" name="ClientExpert">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>700</width>
+    <height>500</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayoutMain">
+   <item>
+    <widget class="QTabWidget" name="tabWidget">
+     <property name="styleSheet">
+      <string notr="true">QTabBar::tab:selected {
+    background: #0078d7;   /* 微软蓝，也可用blue */
+    color: white;
+    border-radius: 3px;
+}
+QTabBar::tab {
+    min-width: 100px; min-height: 28px;
+    background: #eaeaea;
+    color: black;
+    border-radius: 3px;
+    padding: 6px 18px;
+    margin: 2px;
+}</string>
+     </property>
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="tabOrder">
+      <attribute name="title">
+       <string>工单设置</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayoutTabOrder">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayoutSearch">
+         <item>
+          <widget class="QLineEdit" name="lineEditKeyword">
+           <property name="placeholderText">
+            <string>关键词</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="comboBoxStatus">
+           <item>
+            <property name="text">
+             <string>全部</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>待处理</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>已接受</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>已拒绝</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnSearchOrder">
+           <property name="text">
+            <string>搜索</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacerSearch">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="tableOrders"/>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayoutOrderButtons">
+         <item>
+          <widget class="QPushButton" name="btnAccept">
+           <property name="text">
+            <string>接受工单</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnReject">
+           <property name="text">
+            <string>拒绝工单</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnRefreshOrderStatus">
+           <property name="text">
+            <string>刷新状态</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacerOrderBtn">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tabDevice">
+      <attribute name="title">
+       <string>设备管理</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayoutTabDevice"/>
+     </widget>
+     <widget class="QWidget" name="tabOther">
+      <attribute name="title">
+       <string>企业知识库</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayoutTabOther"/>
+     </widget>
+     <widget class="QWidget" name="tabRealtime">
+      <attribute name="title">
+       <string>实时通讯</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayoutTabRealtime"/>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

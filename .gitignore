@@ -1,0 +1,52 @@
+# Qt/qmake user files
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.qmlproject.user
+*.creator.user
+*.autosave
+
+# Build artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.app
+*.pch
+
+# Qt generated
+moc_*.*
+qrc_*.*
+ui_*.h
+*.qrc.depends
+
+# Makefiles & qmake stash
+Makefile
+*.mk
+.qmake.stash
+
+# Build directories
+build/
+APP/subdirs/build/
+
+# Logs, caches, misc
+*.log
+*.tmp
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# CMake (in case of future migration)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+_install/
+out/
+build-*/

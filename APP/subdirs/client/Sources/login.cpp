@@ -3,6 +3,7 @@
 #include "regist.h"
 #include "client_factory.h"
 #include "client_expert.h"
+
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageBox>
@@ -10,10 +11,154 @@
 #include <QTcpSocket>
 #include <QCloseEvent>
 #include <QCoreApplication>
+#include <QApplication>
+#include <QComboBox>
+#include <QStyle>
+
+// 全局样式（仅UI）。说明：
+// - roleTheme 属性用于登录/注册页动态切换主题：none(灰)/expert(蓝)/factory(绿)。
+// - 对主界面不改代码，通过根对象名 #ClientExpert / #ClientFactory 自动着色。
+// - 不使用任何图形特效，跨平台稳定。
+// - 提升 QComboBox 下拉箭头和下拉项对比度；突显表头与 Tab 选中态。
+static const char kGlobalQss[] = R"QSS(
+* {
+    font-family: "Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Segoe UI",sans-serif;
+    font-size: 16px;
+    color: #1f2937;
+}
+
+/* 登录/注册：根据 roleTheme 切换背景 */
+QWidget[roleTheme="none"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f3f4f6, stop:1 #e5e7eb);
+}
+QWidget[roleTheme="expert"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e8f3fe, stop:1 #a8d0fb);
+}
+QWidget[roleTheme="factory"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e9f8ef, stop:1 #b8e3c2);
+}
+
+/* 主界面：通过根对象名自动着色（无需改代码） */
+QWidget#ClientExpert {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e8f3fe, stop:1 #a8d0fb);
+}
+QWidget#ClientFactory {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e9f8ef, stop:1 #b8e3c2);
+}
+
+/* 容器透明以露出背景 */
+QGroupBox, QFrame, QWidget#centralWidget { background: transparent; border: none; }
+
+/* 输入与文本框 */
+QLineEdit, QPlainTextEdit, QTextEdit {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 8px 12px;
+    selection-background-color: #cbd5e1;
+    selection-color: #111827;
+    min-height: 38px;
+}
+
+/* 登录/注册页的聚焦边框颜色随主题变化 */
+QWidget[roleTheme="expert"] QLineEdit:focus,
+QWidget[roleTheme="expert"] QPlainTextEdit:focus,
+QWidget[roleTheme="expert"] QTextEdit:focus { border: 1px solid #1976d2; }
+QWidget[roleTheme="factory"] QLineEdit:focus,
+QWidget[roleTheme="factory"] QPlainTextEdit:focus,
+QWidget[roleTheme="factory"] QTextEdit:focus { border: 1px solid #2e7d32; }
+QWidget[roleTheme="none"] QLineEdit:focus,
+QWidget[roleTheme="none"] QPlainTextEdit:focus,
+QWidget[roleTheme="none"] QTextEdit:focus { border: 1px solid #6b7280; }
+
+/* 身份下拉（增强箭头与对比度） */
+QComboBox {
+    background: #ffffff;
+    border: 1px solid #cfd8dc;
+    border-radius: 12px;
+    padding: 6px 10px;
+    min-height: 38px;
+}
+QComboBox:focus { border: 1px solid #94a3b8; }
+QComboBox::drop-down {
+    width: 36px;
+    border-left: 1px solid #e5e7eb;
+    border-top-right-radius: 12px;
+    border-bottom-right-radius: 12px;
+    background: #f3f4f6;
+}
+QWidget[roleTheme="expert"] QComboBox::drop-down { background: #e3f2fd; }
+QWidget[roleTheme="factory"] QComboBox::drop-down { background: #e8f5e9; }
+QComboBox::down-arrow { width: 14px; height: 14px; margin-right: 10px; }
+QComboBox QAbstractItemView { background: #ffffff; border: 1px solid #d1d5db; outline: 0; }
+QWidget[roleTheme="expert"] QComboBox QAbstractItemView::item:selected { background: #1976d2; color: #ffffff; }
+QWidget[roleTheme="factory"] QComboBox QAbstractItemView::item:selected { background: #2e7d32; color: #ffffff; }
+QWidget[roleTheme="none"]   QComboBox QAbstractItemView::item:selected { background: #6b7280; color: #ffffff; }
+
+/* 按钮（非 primary） */
+QPushButton {
+    background: rgba(255,255,255,0.9);
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 8px 16px;
+    color: #111827;
+    min-height: 40px;
+}
+QPushButton:hover { background: rgba(255,255,255,1.0); }
+QPushButton:pressed { background: #eef2f7; }
+QPushButton:disabled { color: #9ca3af; background: #f3f4f6; border-color: #e5e7eb; }
+
+/* 主要按钮（primary=true）主题色 */
+QWidget[roleTheme="expert"] QPushButton[primary="true"] { background: #1976d2; color: #ffffff; border: 1px solid #115293; }
+QWidget[roleTheme="expert"] QPushButton[primary="true"]:hover   { background: #1e88e5; }
+QWidget[roleTheme="expert"] QPushButton[primary="true"]:pressed { background: #1565c0; }
+
+QWidget[roleTheme="factory"] QPushButton[primary="true"] { background: #2e7d32; color: #ffffff; border: 1px solid #1b5e20; }
+QWidget[roleTheme="factory"] QPushButton[primary="true"]:hover   { background: #388e3c; }
+QWidget[roleTheme="factory"] QPushButton[primary="true"]:pressed { background: #1b5e20; }
+
+QWidget[roleTheme="none"] QPushButton[primary="true"] { background: #6b7280; color: #ffffff; border: 1px solid #4b5563; }
+QWidget[roleTheme="none"] QPushButton[primary="true"]:hover   { background: #7b8391; }
+QWidget[roleTheme="none"] QPushButton[primary="true"]:pressed { background: #4b5563; }
+
+/* 主界面 Tab 着色（对象名匹配），和登录/注册页（roleTheme）两种方式都支持 */
+QTabBar::tab {
+    min-width: 100px; min-height: 28px;
+    background: #eaeaea; color: #111827;
+    border-radius: 8px; padding: 6px 18px; margin: 2px;
+}
+QWidget#ClientExpert  QTabBar::tab:selected { background: #1976d2; color: #ffffff; }
+QWidget#ClientFactory QTabBar::tab:selected { background: #2e7d32; color: #ffffff; }
+QWidget[roleTheme="expert"] QTabBar::tab:selected { background: #1976d2; color: #ffffff; }
+QWidget[roleTheme="factory"] QTabBar::tab:selected { background: #2e7d32; color: #ffffff; }
+QWidget[roleTheme="none"]    QTabBar::tab:selected { background: #6b7280; color: #ffffff; }
+
+/* 表格：表头高亮、选中高亮、斑马纹 */
+QTableView, QTableWidget {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    gridline-color: #e5e7eb;
+    alternate-background-color: #fafafa;
+}
+QHeaderView::section {
+    padding: 6px 8px;
+    border: none;
+    background: #9aa0a6;
+    color: #ffffff;
+}
+QWidget#ClientExpert  QHeaderView::section { background: #1976d2; color: #ffffff; }
+QWidget#ClientFactory QHeaderView::section { background: #2e7d32; color: #ffffff; }
+QTableView::item:selected, QTableWidget::item:selected { background: #90caf9; color: #0b1020; }
+QWidget#ClientFactory QTableView::item:selected,
+QWidget#ClientFactory QTableWidget::item:selected { background: #a5d6a7; color: #0b1020; }
+
+/* 分隔线（如有） */
+QFrame[frameShape="4"], QFrame[frameShape="5"] { color: #e5e7eb; background: #e5e7eb; }
+)QSS";
 
 static const char* SERVER_HOST = "127.0.0.1";
 static const quint16 SERVER_PORT = 5555;
-
 
 Login::Login(QWidget *parent) :
     QWidget(parent),
@@ -21,16 +166,35 @@ Login::Login(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    // 主按钮用蓝色主题
-       ui->btnLogin->setProperty("primary", true);
+    // 应用全局样式（仅UI，不影响功能）
+    qApp->setStyleSheet(QString::fromUtf8(kGlobalQss));
 
-       // 初始化角色下拉
-       ui->cbRole->clear();
-       ui->cbRole->addItem("请选择身份"); // 0
-       ui->cbRole->addItem("专家");        // 1
-       ui->cbRole->addItem("工厂");        // 2
-       ui->cbRole->setCurrentIndex(0);
+    // 登录页：主按钮声明为 primary（样式用）
+    ui->btnLogin->setProperty("primary", true);
 
+    // 初始化角色下拉
+    ui->cbRole->clear();
+    ui->cbRole->addItem("请选择身份"); // 0
+    ui->cbRole->addItem("专家");        // 1
+    ui->cbRole->addItem("工厂");        // 2
+    ui->cbRole->setCurrentIndex(0);
+
+    // 初始主题：未选择 -> 灰色
+    this->setProperty("roleTheme", "none");
+    this->style()->unpolish(this);
+    this->style()->polish(this);
+
+    // 身份变化 -> 仅更新UI属性，不触碰业务逻辑
+    connect(ui->cbRole, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int idx){
+                QString key = "none";
+                if (idx == 1) key = "expert";
+                else if (idx == 2) key = "factory";
+                this->setProperty("roleTheme", key);
+                this->style()->unpolish(this);
+                this->style()->polish(this);
+                this->update();
+            });
 }
 
 Login::~Login()
@@ -40,7 +204,6 @@ Login::~Login()
 
 void Login::closeEvent(QCloseEvent *event)
 {
-    // 让登录窗口决定何时退出
     QCoreApplication::quit();
     QWidget::closeEvent(event);
 }
@@ -115,6 +278,7 @@ void Login::on_btnLogin_clicked()
         return;
     }
 
+    // 仅UI窗口切换，功能不变
     if (role == "expert") {
         if (!expertWin) expertWin = new ClientExpert;
         expertWin->show();
@@ -127,12 +291,20 @@ void Login::on_btnLogin_clicked()
 
 void Login::on_btnToReg_clicked()
 {
-    // 独立顶层打开注册窗口，并隐藏当前登录窗口
-    class Regist;
-    extern void openRegistDialog(QWidget *login,
-                                 const QString &prefRole,
-                                 const QString &prefUser,
-                                 const QString &prefPass);
-    openRegistDialog(this, selectedRole(), ui->leUsername->text(), ui->lePassword->text());
+    // 打开注册窗口（不改注册逻辑）
+    Regist *r = new Regist(nullptr);
+    r->setAttribute(Qt::WA_DeleteOnClose);
+    // 若 Regist::preset 存在则预填（存在即用）
+    if (r->metaObject()->indexOfMethod("preset(QString,QString,QString)") >= 0) {
+        QMetaObject::invokeMethod(r, "preset",
+                                  Q_ARG(QString, selectedRole()),
+                                  Q_ARG(QString, ui->leUsername->text()),
+                                  Q_ARG(QString, ui->lePassword->text()));
+    }
+    // 关闭/销毁注册窗口后恢复显示登录
+    connect(r, &QObject::destroyed, this, [this](){
+        this->show(); this->raise(); this->activateWindow();
+    });
+    this->hide();
+    r->show();
 }
-

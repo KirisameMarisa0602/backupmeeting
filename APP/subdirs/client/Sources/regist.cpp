@@ -1,6 +1,7 @@
 #include "regist.h"
 #include "ui_regist.h"
 #include "login.h"
+
 #include <QTcpSocket>
 #include <QJsonObject>
 #include <QJsonDocument>
@@ -8,6 +9,8 @@
 #include <QHostAddress>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QRegularExpression>
+#include <QStyle>
 
 static const char* SERVER_HOST = "127.0.0.1";
 static const quint16 SERVER_PORT = 5555;
@@ -21,13 +24,32 @@ Regist::Regist(QWidget *parent) :
     setWindowFlag(Qt::Window, true);
     setAttribute(Qt::WA_DeleteOnClose);
 
+    // 注册页：主按钮声明为 primary（样式用）
     ui->btnRegister->setProperty("primary", true);
-    ui->cbRole->clear();
-        ui->cbRole->addItem("请选择身份"); // 0
-        ui->cbRole->addItem("专家");        // 1
-        ui->cbRole->addItem("工厂");        // 2
-        ui->cbRole->setCurrentIndex(0);
 
+    // 角色下拉
+    ui->cbRole->clear();
+    ui->cbRole->addItem("请选择身份"); // 0
+    ui->cbRole->addItem("专家");        // 1
+    ui->cbRole->addItem("工厂");        // 2
+    ui->cbRole->setCurrentIndex(0);
+
+    // 初始主题：未选择 -> 灰色
+    this->setProperty("roleTheme", "none");
+    this->style()->unpolish(this);
+    this->style()->polish(this);
+
+    // 身份变化 -> 更新UI主题属性（不触碰任何功能逻辑）
+    connect(ui->cbRole, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int idx){
+                QString key = "none";
+                if (idx == 1) key = "expert";
+                else if (idx == 2) key = "factory";
+                this->setProperty("roleTheme", key);
+                this->style()->unpolish(this);
+                this->style()->polish(this);
+                this->update();
+            });
 }
 
 Regist::~Regist()
@@ -44,6 +66,14 @@ void Regist::preset(const QString &role, const QString &user, const QString &pas
     ui->leUsername->setText(user);
     ui->lePassword->setText(pass);
     ui->leConfirm->clear();
+
+    // 预填后立即应用主题
+    int idx = ui->cbRole->currentIndex();
+    QString key = (idx==1) ? "expert" : (idx==2) ? "factory" : "none";
+    this->setProperty("roleTheme", key);
+    this->style()->unpolish(this);
+    this->style()->polish(this);
+    this->update();
 }
 
 QString Regist::selectedRole() const
@@ -73,7 +103,8 @@ bool Regist::sendRequest(const QJsonObject &obj, QJsonObject &reply, QString *er
         return false;
     }
     QByteArray resp = sock.readAll();
-    if (int nl = resp.indexOf('\n'); nl >= 0) resp = resp.left(nl);
+    int nl = resp.indexOf('\n');
+    if (nl >= 0) resp = resp.left(nl);
 
     QJsonParseError pe{};
     QJsonDocument rdoc = QJsonDocument::fromJson(resp, &pe);
@@ -99,6 +130,9 @@ void Regist::on_btnRegister_clicked()
         QMessageBox::warning(this, "提示", "两次输入的密码不一致");
         return;
     }
+
+    // 可选：若项目已有服务端校验规则，请保持一致；此处不做额外业务改动
+
     const QString role = selectedRole();
     if (role.isEmpty()) {
         QMessageBox::warning(this, "提示", "请选择身份");
@@ -123,53 +157,10 @@ void Regist::on_btnRegister_clicked()
     }
 
     QMessageBox::information(this, "注册成功", "账号初始化完成");
-    emit registered(username, role);
-    close(); // 关闭注册窗口
+    close(); // UI行为保持不变：关闭注册窗口
 }
 
 void Regist::on_btnBack_clicked()
 {
-    close(); // 关闭注册窗口，登录窗口将由外部连接恢复显示
-}
-
-// 顶层打开注册窗口：隐藏登录窗口，注册窗口关闭时恢复
-void openRegistDialog(QWidget *login, const QString &prefRole,
-                      const QString &prefUser, const QString &prefPass)
-{
-    // 1) 创建为顶层窗口（无 parent）
-    Regist *r = new Regist(nullptr);
-    r->setAttribute(Qt::WA_DeleteOnClose);
-    r->preset(prefRole, prefUser, prefPass);
-
-    // 2) 隐藏登录窗口，避免残留
-    if (login) login->hide();
-
-    // 3) 注册成功时：回填登录界面并恢复显示
-    QObject::connect(r, &Regist::registered, r, [login](const QString &u, const QString &role){
-        if (!login) return;
-        if (auto cb = login->findChild<QComboBox*>("cbRole")) {
-            if (role == "expert") cb->setCurrentIndex(1);
-            else if (role == "factory") cb->setCurrentIndex(2);
-            else cb->setCurrentIndex(0);
-        }
-        if (auto leUser = login->findChild<QLineEdit*>("leUsername")) leUser->setText(u);
-        if (auto lePass = login->findChild<QLineEdit*>("lePassword")) { lePass->clear(); lePass->setFocus(); }
-        login->show(); login->raise(); login->activateWindow();
-    });
-
-    // 4) 无论何种方式关闭注册窗口，都恢复显示登录窗口
-    QObject::connect(r, &QObject::destroyed, login, [login](){
-        if (!login) return;
-        login->show(); login->raise(); login->activateWindow();
-    });
-
-    // 5) 将注册窗口居中到登录窗口位置
-    if (login) {
-        const QRect lg = login->geometry();
-        r->resize(r->sizeHint().expandedTo(QSize(680, 620))); // 与 UI 最小尺寸一致
-        const QPoint p = lg.center() - QPoint(r->width()/2, r->height()/2);
-        r->move(p);
-    }
-
-    r->show();
+    close();
 }

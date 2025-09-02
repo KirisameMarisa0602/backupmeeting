@@ -23,19 +23,91 @@
 #include <QStandardPaths>
 #include <QDebug>
 
+static QString buildPanelQss(const QString& theme) {
+    // theme: "expert" | "factory" | "none"
+    QString bgGrad, primary, primaryBorder, primaryHover, selBg, selFg;
+    if (theme == "expert") {
+        bgGrad        = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0d47a1, stop:1 #bbdefb)";
+        primary       = "#1976d2";
+        primaryBorder = "#115293";
+        primaryHover  = "#1e88e5";
+        selBg         = "#90caf9";
+        selFg         = "#0b1020";
+    } else if (theme == "factory") {
+        bgGrad        = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1b5e20, stop:1 #c8e6c9)";
+        primary       = "#2e7d32";
+        primaryBorder = "#1b5e20";
+        primaryHover  = "#388e3c";
+        selBg         = "#a5d6a7";
+        selFg         = "#0b1020";
+    } else {
+        bgGrad        = "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f3f4f6, stop:1 #e5e7eb)";
+        primary       = "#6b7280";
+        primaryBorder = "#4b5563";
+        primaryHover  = "#7b8391";
+        selBg         = "#cbd5e1";
+        selFg         = "#0b1020";
+    }
+
+    const QString textMain    = "#111827";
+    const QString fieldBg     = "#ffffff";
+    const QString fieldBorder = "#cfd8dc";
+    const QString tableBg     = "#ffffff";
+    const QString tableText   = "#0b1020";
+    const QString gridColor   = "#e5e7eb";
+    const QString headerFg    = "#ffffff";
+
+    QString qss =
+        "#KnowledgePanelRoot { background:%1; color:%2; }"
+        "#KnowledgePanelRoot QLineEdit, "
+        "#KnowledgePanelRoot QSpinBox { background:%3; color:%2; border:1px solid %4; padding:6px; border-radius:10px; }"
+        "#KnowledgePanelRoot QPushButton { background:%5; color:#ffffff; border:1px solid %6; padding:6px 12px; border-radius:10px; }"
+        "#KnowledgePanelRoot QPushButton:hover { background:%7; }"
+        "#KnowledgePanelRoot QTableWidget { background:%8; color:%9; gridline-color:%10; border:1px solid %10; border-radius:10px; }"
+        "#KnowledgePanelRoot QHeaderView::section { background:%5; color:%11; border:none; padding:6px; }"
+        "#KnowledgePanelRoot QTableWidget::item:selected { background:%12; color:%13; }";
+
+    // 依次替换 %1..%13
+    qss = qss
+        .arg(bgGrad)      // %1
+        .arg(textMain)    // %2
+        .arg(fieldBg)     // %3
+        .arg(fieldBorder) // %4
+        .arg(primary)     // %5
+        .arg(primaryBorder) // %6
+        .arg(primaryHover)  // %7
+        .arg(tableBg)       // %8
+        .arg(tableText)     // %9
+        .arg(gridColor)     // %10
+        .arg(headerFg)      // %11
+        .arg(selBg)         // %12
+        .arg(selFg);        // %13
+
+    return qss;
+}
+
+static QString detectThemeFromTopLevel(QWidget* w) {
+    if (!w) return "none";
+    QWidget* tlw = w->window();
+    if (!tlw) {
+        // 兜底：向上找
+        tlw = w;
+        while (tlw->parentWidget()) tlw = tlw->parentWidget();
+    }
+    const QString name = tlw->objectName();
+    if (name == "ClientExpert")  return "expert";
+    if (name == "ClientFactory") return "factory";
+    return "none";
+}
+
 KnowledgePanel::KnowledgePanel(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName("KnowledgePanelRoot");
-    setStyleSheet(
-        "#KnowledgePanelRoot { background:#121212; color:#e6e6e6; }"
-        "#KnowledgePanelRoot QLineEdit, "
-        "#KnowledgePanelRoot QSpinBox { background:#1e1e1e; color:#eeeeee; border:1px solid #3a3a3a; padding:4px; }"
-        "#KnowledgePanelRoot QPushButton { background:#2b2b2b; color:#eaeaea; border:1px solid #3a3a3a; padding:5px 10px; }"
-        "#KnowledgePanelRoot QTableWidget { background:#151515; color:#dddddd; gridline-color:#333333; }"
-        "#KnowledgePanelRoot QHeaderView::section { background:#1b1b1b; color:#d0d0d0; border:1px solid #333; padding:4px; }"
-        "#KnowledgePanelRoot QTableWidget::item:selected { background:#2d6cdf; color:#ffffff; }"
-    );
+
+    // 根据顶层窗口类型（ClientExpert/ClientFactory）应用主题渐变
+    const QString theme = detectThemeFromTopLevel(this);
+    setStyleSheet(buildPanelQss(theme));
 
     // 顶部操作条
     hostEdit_    = new QLineEdit(this);

@@ -15,7 +15,23 @@
 #include <QComboBox>
 #include <QStyle>
 #include <QPushButton>
-
+#include <QToolButton>
+#include <QWidgetAction>
+static void addPasswordToggle(QLineEdit* le) {
+    if (!le) return;
+    auto wa = new QWidgetAction(le);
+    auto btn = new QToolButton(le);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setAutoRaise(true);
+    btn->setText(QString::fromUtf8("👁"));
+    btn->setToolTip(QString::fromUtf8("显示/隐藏密码"));
+    wa->setDefaultWidget(btn);
+    le->addAction(wa, QLineEdit::TrailingPosition);
+    QObject::connect(btn, &QToolButton::clicked, le, [le](){
+        le->setEchoMode(le->echoMode() == QLineEdit::Password ? QLineEdit::Normal
+                                                              : QLineEdit::Password);
+    });
+}
 // 全局样式（仅UI）。说明：
 // - roleTheme 属性用于登录/注册页动态切换主题：none(灰)/expert(蓝)/factory(绿)。
 // - 对主界面不改代码，通过根对象名 #ClientExpert / #ClientFactory 自动着色。
@@ -201,7 +217,7 @@ Login::Login(QWidget *parent) :
     ui(new Ui::Login)
 {
     ui->setupUi(this);
-
+    addPasswordToggle(ui->lePassword);
     // 应用全局样式（仅UI，不影响功能）
     qApp->setStyleSheet(QString::fromUtf8(kGlobalQss));
 

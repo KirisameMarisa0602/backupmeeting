@@ -12,6 +12,8 @@
 #include <QRegularExpression>
 #include <QStyle>
 #include <QPushButton>
+#include <QToolButton>
+#include <QWidgetAction>
 
 static const char* SERVER_HOST = "127.0.0.1";
 static const quint16 SERVER_PORT = 5555;
@@ -35,6 +37,23 @@ static void applyRoleThemeTo(QWidget* root, const QString& key) {
         }
     }
     repolish(root);
+}
+
+// 为密码输入框添加“眼睛”按钮，点击切换显示/隐藏
+static void addPasswordToggle(QLineEdit* le) {
+    if (!le) return;
+    auto wa = new QWidgetAction(le);
+    auto btn = new QToolButton(le);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setAutoRaise(true);
+    btn->setText(QString::fromUtf8("👁"));
+    btn->setToolTip(QString::fromUtf8("显示/隐藏密码"));
+    wa->setDefaultWidget(btn);
+    le->addAction(wa, QLineEdit::TrailingPosition);
+    QObject::connect(btn, &QToolButton::clicked, le, [le](){
+        le->setEchoMode(le->echoMode() == QLineEdit::Password ? QLineEdit::Normal
+                                                              : QLineEdit::Password);
+    });
 }
 
 Regist::Regist(QWidget *parent) :
@@ -67,6 +86,10 @@ Regist::Regist(QWidget *parent) :
                 else if (idx == 2) key = QStringLiteral("factory");
                 applyRoleThemeTo(this, key);
             });
+
+    // 为密码与确认密码添加“眼睛”按钮
+    addPasswordToggle(ui->lePassword);
+    addPasswordToggle(ui->leConfirm);
 }
 
 Regist::~Regist()
@@ -142,6 +165,13 @@ void Regist::on_btnRegister_clicked()
     }
     if (password != confirm) {
         QMessageBox::warning(this, "提示", "两次输入的密码不一致");
+        return;
+    }
+
+    // 密码格式校验：≥8 位，包含字母和数字，且仅字母数字（不含特殊字符）
+    QRegularExpression re(QStringLiteral("^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{8,}$"));
+    if (!re.match(password).hasMatch()) {
+        QMessageBox::warning(this, "提示", "密码需至少8位，包含字母和数字，且不可含特殊字符");
         return;
     }
 

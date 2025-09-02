@@ -15,6 +15,7 @@
    <property name="rightMargin"><number>20</number></property>
    <property name="bottomMargin"><number>20</number></property>
 
+   <!-- 顶部大标题：楷体 + 放大字号 + 深色 -->
    <item>
     <widget class="QLabel" name="lbTitle">
      <property name="objectName"><string>headline</string></property>
@@ -22,17 +23,17 @@
      <property name="alignment"><set>Qt::AlignHCenter|Qt::AlignVCenter</set></property>
      <property name="margin"><number>8</number></property>
      <property name="styleSheet">
-      <string notr="true">color: #0f172a;</string>
+      <string notr="true">color:#0f172a; font-family:&quot;KaiTi&quot;,&quot;STKaiti&quot;,&quot;Kaiti SC&quot;,&quot;KaiTi_GB2312&quot;,&quot;Noto Serif SC&quot;,serif; letter-spacing:1px;</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>22</pointsize>
+       <pointsize>28</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
      </property>
      <property name="minimumHeight">
-      <number>48</number>
+      <number>60</number>
      </property>
     </widget>
    </item>

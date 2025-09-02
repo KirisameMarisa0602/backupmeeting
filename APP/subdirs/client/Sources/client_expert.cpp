@@ -184,24 +184,21 @@ void ClientExpert::on_btnAccept_clicked()
 {
     int row = ui->tableOrders->currentRow();
     if (row < 0 || row >= orders.size()) {
-        // 静默返回：不再弹出“请选择一个工单”
         return;
     }
-    int id = orders[row].id;
+    const int id = orders[row].id;
 
-    // 更新状态
+    // 更新状态为“已接受”
     sendUpdateOrder(id, "已接受");
 
-    // 进入工单上下文
+    // 标记已加入工单上下文
     setJoinedOrder(true);
 
-    // 设备面板上下文
+    // 若有设备/知识库面板，需要设定上下文
     if (devicePanel_) devicePanel_->setOrderContext(QString::number(id));
+    if (kbPanel_)     kbPanel_->setRoomFilter(QString::number(id));
 
-    // 知识库页按工单过滤
-    if (kbPanel_) kbPanel_->setRoomFilter(QString::number(id));
-
-    // 自动加入会议
+    // 自动加入会议上下文（保持你项目原有逻辑）
     if (!g_expertUsername.isEmpty()) {
         commWidget_->mainWindow()->setJoinedContext(g_expertUsername, QString::number(id));
     } else {
@@ -209,7 +206,11 @@ void ClientExpert::on_btnAccept_clicked()
     }
     QMetaObject::invokeMethod(commWidget_->mainWindow(), "onJoin");
 
-    // 立即刷新
+    // 引导提示
+    QMessageBox::information(this, tr("提示"),
+        tr("已接受工单，可前往设备详情页面/实时通讯页面处理工单"));
+
+    // 刷新工单列表
     refreshOrders();
 }
 

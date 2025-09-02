@@ -13,7 +13,26 @@
 #include "comm/commwidget.h"
 #include "comm/devicepanel.h"
 #include "comm/knowledge_panel.h"
+#include <QTabWidget>
+#include <QTabBar>
+namespace {
+static void applyExpertTabStyle(QTabWidget* tabs) {
+    if (!tabs) return;
+    QTabBar* bar = tabs->tabBar();
+    if (!bar) return;
 
+    // 专家端：选中蓝底
+    bar->setStyleSheet(
+        "QTabWidget::pane{ border:0; }"
+        "QTabBar::tab{"
+        "  padding:8px 16px; margin:2px; border-radius:8px;"
+        "  background:#e5e7eb; color:#111827;"
+        "}"
+        "QTabBar::tab:selected{ background:#2563eb; color:#ffffff; }"
+        "QTabBar::tab:hover{ background:#d1d5db; }"
+    );
+}
+} // namespace
 // 与工程既有约定保持一致
 QString g_factoryUsername;
 QString g_expertUsername;
@@ -45,6 +64,7 @@ ClientExpert::ClientExpert(QWidget *parent) :
     ui(new Ui::ClientExpert)
 {
     ui->setupUi(this);
+    applyExpertTabStyle(ui->tabWidget);
     // 标注顶层对象名，用于主题检测（聊天侧栏蓝色渐变等）
     setObjectName("ClientExpert");
 

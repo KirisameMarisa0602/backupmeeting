@@ -19,6 +19,26 @@
 #include "comm/commwidget.h"
 #include "comm/devicepanel.h"
 #include "comm/knowledge_panel.h"
+#include <QTabWidget>
+#include <QTabBar>
+namespace {
+static void applyFactoryTabStyle(QTabWidget* tabs) {
+    if (!tabs) return;
+    QTabBar* bar = tabs->tabBar();
+    if (!bar) return;
+
+    // 工厂端：选中绿底
+    bar->setStyleSheet(
+        "QTabWidget::pane{ border:0; }"
+        "QTabBar::tab{"
+        "  padding:8px 16px; margin:2px; border-radius:8px;"
+        "  background:#e5e7eb; color:#111827;"
+        "}"
+        "QTabBar::tab:selected{ background:#10b981; color:#ffffff; }"
+        "QTabBar::tab:hover{ background:#d1d5db; }"
+    );
+}
+} // namespace
 
 static const char*  SERVER_HOST = "127.0.0.1";
 static const quint16 SERVER_PORT = 5555;
@@ -78,6 +98,7 @@ ClientFactory::ClientFactory(QWidget *parent) :
     ui(new Ui::ClientFactory)
 {
     ui->setupUi(this);
+    applyFactoryTabStyle(ui->tabWidget);
     // 标注顶层对象名，用于主题检测（聊天侧栏绿色渐变等）
     setObjectName("ClientFactory");
 
